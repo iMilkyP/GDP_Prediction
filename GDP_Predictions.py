@@ -7,72 +7,97 @@ import matplotlib.pyplot as plt
 from math import sqrt
 from sklearn.preprocessing import MinMaxScaler 
 
-st.title("GDP Predictor")
+# **Title:** Sets the title of the Streamlit application
+st.title("GDP Prediction Tester")
 
+# **Caching Functions:** Decorators for efficient model and scaler loading
 @st.cache_resource 
 def load_my_model():
+    """Loads the pre-trained SimpleRNN model from the 'SimpleRNN_Forecasting.h5' file.
+
+    Returns:
+        The loaded Keras model.
+    """
     model = load_model('SimpleRNN_Forecasting.h5') 
     return model
 
 @st.cache_resource 
 def load_scaler():
+    """Loads a MinMaxScaler object for data normalization.
+
+    Returns:
+        The fitted MinMaxScaler object.
+    """
     scaler = MinMaxScaler()
     return scaler
 
+# **Global Variables:** Loads model and scaler outside of main loop for efficiency
 model = load_my_model()
 scaler = load_scaler()
 
 def format_rnn_input(data_scaled, timesteps):
+    """Prepares data for the RNN model, creating overlapping sequences.
+
+    Args:
+        data_scaled: The scaled GDP data (NumPy array).
+        timesteps: The number of previous data points to include in each sequence.
+
+    Returns:
+        A tuple containing:
+            X_test: NumPy array of input sequences.
+            y_test: NumPy array of target values.
+    """
     x, y = [], []
     for i in range(timesteps, 105):
         x.append(data_scaled[i-timesteps:i, 0])
         y.append(data_scaled[i, 0])
     return np.array(x), np.array(y)
 
+# **File Uploader:** Allows user to select a CSV file 
 uploaded_file = st.file_uploader("Upload CSV file", type=['csv'])
 
+# **Conditional Block:** Executes prediction logic if a file is uploaded
 if uploaded_file is not None:
-    data = pd.read_csv(uploaded_file) 
-    gdp_data = data['Total GDP Province']
-    test = gdp_data.values.reshape(-1, 1)
-    test2 = scaler.fit_transform(test)
-    print(test2)
-    # Data Scaling
-    gdp_data_scaled = scaler.fit_transform(gdp_data.values.reshape(-1, 1)) 
-    # Prepare data in RNN testing format
+    # **Data Loading:**
+    data = pd.read_csv(uploaded_file)
+    year2122 = data[data['Years'] == '2021-2022'] # Filter for the relevant year
+    gdp_data = year2122['Total GDP Province']
     timesteps = 2
+    
+    # **Data Scaling:**
+    gdp_data_scaled = scaler.fit_transform(gdp_data.values.reshape(-1, 1)) 
     X_test, y_test = format_rnn_input(gdp_data_scaled, timesteps)
     
+    # **Reshaping for RNN:**
     X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1)) 
     y_test = np.reshape(y_test, (-1, 1))
     
-    # Generate predictions 
+    # **Generating Predictions:**
     predictions = scaler.inverse_transform(model.predict(X_test))
     predicitons_actual = scaler.inverse_transform(y_test)
 
-    # Display Predictions Table
-    st.header("Predictions: ")
+    # **Predictions Table:**
+    st.header("Predictions Table: ")
     pred_df = pd.DataFrame({'Predicted': predictions.flatten(), 
                         'Actual': predicitons_actual.flatten()})
     st.table(pred_df) 
 
-    # Display Test Graph (Include Calculation)
+    # **Test Results Header:**
     st.header("Test Results: ")
     
-    fig, ax = plt.subplots(figsize=(30, 10)) 
+    # **Predictions Graph:**
+    st.header("Predictions Graph: ")  
+    pred_df = pd.DataFrame({'Predicted': predictions.flatten(), 
+                            'Actual': predicitons_actual.flatten()})
+    st.line_chart(pred_df) 
     
-    ax.plot(predictions, label='y_pred', ls='--', lw = 2)
-    ax.plot(predicitons_actual, label='y_test_actual')
-    ax.legend()
-    st.pyplot(fig)
-    
-    # Calculate and Display Metrics
+    # **Evaluation Metrics:**
     loss, accuracy = model.evaluate(X_test, y_test)
     rmse = sqrt(mean_squared_error(predicitons_actual, predictions))
 
     st.header("Evaluation Metrics")
-    st.write(f"Loss: {loss:.4f}")
-    st.write(f"Accuracy: {accuracy:.4f}")
+    st.write(f"Loss: {loss:.4f} or {loss * 100:.2f}%")
+    st.write(f"Accuracy: {accuracy:.4f} or {accuracy * 100:.2f}%")
     st.write(f"Test RMSE: {rmse:.2f}")
     
 else:
